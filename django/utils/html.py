@@ -1,5 +1,6 @@
 """HTML utilities suitable for global use."""
 
+import json
 import re
 from urllib.parse import (
     parse_qsl, quote, unquote, urlencode, urlsplit, urlunsplit,
@@ -71,6 +72,32 @@ _js_escapes.update((ord('%c' % z), '\\u%04X' % z) for z in range(32))
 def escapejs(value):
     """Hex encode characters for use in JavaScript strings."""
     return mark_safe(force_text(value).translate(_js_escapes))
+
+
+def js_json(value, id):
+    """
+    This will escape all the HTML/XML special characters with their unicode
+    escapes, so it is safe to be output anywhere except for inside a tag
+    attribute. It will wrap the escaped json in a script tag.
+    See https://www.owasp.org/index.php/XSS_(Cross_Site_Scripting)_Prevention_Cheat_Sheet#RULE_.233.1_-_HTML_escape_JSON_values_in_an_HTML_context_and_read_the_data_with_JSON.parse
+    """
+
+    from django.core.serializers.json import DjangoJSONEncoder
+    try:
+        json.loads(value)
+        json_str = value
+    except (ValueError, TypeError):
+        json_str = json.dumps(value, cls=DjangoJSONEncoder)
+
+    # Escape all the XML/HTML special characters.
+    escapes = ['<', '>', '&']
+    for c in escapes:
+        json_str = json_str.replace(c, r'\u%04x' % ord(c))
+
+    return format_html(
+        '<script id="{}" type="application/json">{}</script>',
+        id, mark_safe(json_str)
+    )
 
 
 def conditional_escape(text):

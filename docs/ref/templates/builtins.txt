@@ -1653,6 +1653,37 @@ For example::
 If ``value`` is ``"testing\r\njavascript \'string" <b>escaping</b>"``,
 the output will be ``"testing\\u000D\\u000Ajavascript \\u0027string\\u0022 \\u003Cb\\u003Eescaping\\u003C/b\\u003E"``.
 
+.. templatefilter:: js_json
+
+``js_json``
+-----------
+
+.. versionadded:: 2.0
+
+Returns json wrapped in a script tag ready for use by javascript.
+The value can be a json string or a python object, which will be converted to json.
+
+**Argument:** the html id to give the outputed script block
+
+For example::
+
+    {{ value|js_json:"value_json" }}
+
+If ``value`` is the python dictionary with nested list
+``{'hello': ['world', 'wide']}``, the output will be::
+
+    <script id="value_json" type="application/json">{"hello": ["world", "wide"]}</script>
+
+The resulting data would be accessed in JavaScript like this:
+
+    var el = document.getElementById('value_json');
+    var value = JSON.parse(el.textContent || el.innerText);
+
+This is compatible with a strict Content Security Policy
+which prohibits all in-page script execution and maintains
+a clean separation between passive data and executable code.
+See https://www.owasp.org/index.php/XSS_(Cross_Site_Scripting)_Prevention_Cheat_Sheet#RULE_.233.1_-_HTML_escape_JSON_values_in_an_HTML_context_and_read_the_data_with_JSON.parse
+
 .. templatefilter:: filesizeformat
 
 ``filesizeformat``
