@@ -76,18 +76,14 @@ def escapejs(value):
 
 def js_json(value, id):
     """
-    This will escape all the HTML/XML special characters with their unicode
-    escapes, so it is safe to be output anywhere except for inside a tag
-    attribute. It will wrap the escaped json in a script tag.
+    This will output the object as json wrapped in a script tag.
+    It will escape all the HTML/XML special characters with their
+    unicode escapes, so it is safe to be output inside the script tag.
     See https://www.owasp.org/index.php/XSS_(Cross_Site_Scripting)_Prevention_Cheat_Sheet#RULE_.233.1_-_HTML_escape_JSON_values_in_an_HTML_context_and_read_the_data_with_JSON.parse
     """
 
     from django.core.serializers.json import DjangoJSONEncoder
-    try:
-        json.loads(value)
-        json_str = value
-    except (ValueError, TypeError):
-        json_str = json.dumps(value, cls=DjangoJSONEncoder)
+    json_str = json.dumps(value, cls=DjangoJSONEncoder)
 
     # Escape all the XML/HTML special characters.
     escapes = ['<', '>', '&']
