@@ -64,6 +64,7 @@ bookmarklets
 booleans
 bpython
 Bronn
+Brotli
 bugfix
 bugfixes
 Byteorder
@@ -600,3 +601,4 @@ www
 xe
 xxxxx
 Zope
+Zstandard
