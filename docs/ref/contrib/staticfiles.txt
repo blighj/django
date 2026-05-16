@@ -430,6 +430,164 @@ of directory paths in which the finders searched. Example usage::
     result = finders.find("css/base.css")
     searched_locations = finders.searched_locations
 
+Middleware
+==========
+
+.. class:: middleware.StaticFilesMiddleware
+
+A middleware that watches requests to :setting:`STATIC_URL` that match files in
+:setting:`STATIC_ROOT` and serves the response with appropriate headers.
+
+- Serving compressed content (gzip, Zstandard and Brotli formats, handling
+  Accept-Encoding and Vary headers correctly)
+
+- Setting far-future cache headers on content which won’t change
+
+- Returning 304 Not Modified responses
+
+It’s designed to work nicely with a CDN for high-traffic sites so you don’t
+have to sacrifice performance to benefit from simplicity.
+
+It can be subclassed to change behavior to suit your deployment needs.
+
+.. attribute:: allow_all_origins
+
+    :default: ``True``
+
+    Toggles whether to send an ``Access-Control-Allow-Origin: *`` header for
+    all static files.
+
+    This allows cross-origin requests for static files which means your static
+    files will continue to work as expected even if they are served via a CDN
+    and therefore on a different domain. Without this your static files will
+    *mostly* work, but you may have problems with fonts loading in Firefox,
+    or accessing images in canvas elements, or other mysterious things.
+
+    .. admonition:: Usage on private networks
+
+        ``True`` is appropriate for public deployments, but if you're serving
+        django on a private network where static files should not be readable
+        by arbitrary external JavaScript ``False`` is the better option.
+
+.. attribute:: charset
+
+    :default: ``'utf-8'``
+
+    Charset to add as part of the ``Content-Type`` header for all files whose
+    MIME type allows a charset.
+
+.. attribute:: max_age
+
+    :default: ``60``
+
+    Time (in seconds) for which browsers and proxies should cache
+    **non-versioned** files.
+
+    Versioned files (i.e. files which have been given a unique name like
+    ``base.27e20196a850.css`` with a hash of their contents in the name)
+    are detected automatically and set to be cached forever.
+
+    The default is chosen to be short enough not to cause problems with stale
+    versions but long enough that, if you're running behind a CDN, the CDN will
+    still take the majority of the strain during times of heavy load.
+
+    Set to ``None`` to disable setting any ``Cache-Control`` header on
+    non-versioned files.
+
+.. attribute:: mimetypes
+
+    :default: ``None``
+
+    A dictionary mapping file extensions (lowercase) to the MIME type for that
+    extension. For example: ::
+
+        class MyStaticFilesMiddleware(middleware.StaticFilesMiddleware):
+            mimetypes = {".foo": "application/x-foo"}
+
+    Note that django ships with its own default set of MIME types and does
+    not use the system-supplied ones (e.g. ``/etc/mime.types``). This ensures
+    that it behaves consistently regardless of the environment in which it's
+    run.
+
+    In addition to file extensions, MIME types can be specified by supplying
+    the entire filename, for example: ::
+
+        {"some-special-file": "application/x-custom-type"}
+
+.. attribute:: static_prefix
+
+    :default: Path component of :setting:`STATIC_URL` (with
+              :setting:`FORCE_SCRIPT_NAME` removed if set)
+
+    The URL prefix under which static files will be served.
+
+    Usually this can be determined automatically by using the path component of
+    :setting:`STATIC_URL`. So if :setting:`STATIC_URL` is
+    ``https://example.com/static/`` then ``static_prefix`` will be ``/static/``.
+
+    If your application is not running at the root of the domain and
+    :setting:`FORCE_SCRIPT_NAME` is set, then this value will be removed from
+    the :setting:`STATIC_URL` path first, to give the correct prefix.
+    For example, if :setting:`STATIC_URL` is ``'apple/static/`` and
+    :setting:`FORCE_SCRIPT_NAME` is ``'/apple'``, then ``static_prefix`` will
+    be ``/static/``.
+
+    If your deployment is more complicated than this (for instance, if you are
+    using a CDN which is doing path rewriting) then you may need to configure
+    this value directly.
+
+.. method:: add_headers_function
+
+    A function which is passed the headers object for each static file,
+    allowing it to modify them.
+
+    For example: ::
+
+        class MyStaticFilesMiddleware(middleware.StaticFilesMiddleware):
+            def add_headers_function(self, headers, path, url):
+                # force download of pdfs
+                if path.endswith(".pdf"):
+                    headers["Content-Disposition"] = "attachment"
+
+    The function is passed:
+
+    headers
+      A dict containing the headers for the current file
+
+    path
+      The absolute path to the local file
+
+    url
+      The host-relative URL of the file e.g. ``/static/styles/app.css``
+
+    The function should not return anything; changes should be made by
+    modifying the headers dictionary directly.
+
+.. method:: immutable_file_test
+
+    This is passed the path and URL for each static file and should return
+    whether that file is immutable, i.e. guaranteed not to change, and so can
+    be safely cached forever. The default is designed to work with the
+    ManifestStaticFilesStorage backend, and any derivatives of that, so you
+    should only need to change this if you are using a different system for
+    versioning your static files.
+
+    Example: ::
+
+        class MyStaticFilesMiddleware(middleware.StaticFilesMiddleware):
+            def immutable_file_test(self, path, url):
+                # Match filename with 12 hex digits before the extension
+                # e.g. app.db8f2edc0c8a.js
+                return re.match(r"^.+\.[0-9a-f]{12}\..+$", url)
+
+    The function is passed:
+
+    path
+      The absolute path to the local file
+
+    url
+      The host-relative URL of the file e.g. ``/static/styles/app.css``
+
 Other Helpers
 =============
 

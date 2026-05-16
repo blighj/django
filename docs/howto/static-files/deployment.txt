@@ -25,6 +25,19 @@ As with all deployment tasks, the devil's in the details. Every production
 setup will be a bit different, so you'll need to adapt the basic outline to fit
 your needs. Below are a few common patterns that might help.
 
+Serving your static files using StaticFilesMiddleware
+-----------------------------------------------------
+* Add :class:`django.contrib.staticfiles.middleware.StaticFilesMiddleware`
+  to the :setting:`MIDDLEWARE` setting.
+* Run :djadmin:`collectstatic` to copy all the static files
+  into :setting:`STATIC_ROOT`.
+* Push your project up to the deployment server.
+* Only works if :setting:`DEBUG` = ``False``
+
+This is simplest and works well for small sites. As your traffic
+grows you will get better performance by adding a CDN or using a
+web server to handle the static files.
+
 Serving the site and your static files from the same server
 -----------------------------------------------------------
 

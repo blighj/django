@@ -643,6 +643,11 @@ Here are some hints about the ordering of various Django middleware classes:
    redirect as that avoids running through a bunch of other unnecessary
    middleware.
 
+#. :class:`~django.contrib.staticfiles.middleware.StaticFilesMiddleware`
+
+   It should go near the top of the list so that when it serves a static
+   file it can avoid running through other unnecessary middleware.
+
 #. :class:`~django.middleware.cache.UpdateCacheMiddleware`
 
    Before those that modify the ``Vary`` header (``SessionMiddleware``,
