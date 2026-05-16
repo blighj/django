@@ -13,6 +13,7 @@ from django.contrib.staticfiles import finders, storage
 from django.contrib.staticfiles.management.commands.collectstatic import (
     Command as CollectstaticCommand,
 )
+from django.contrib.staticfiles.storage import HashedFilesMixin
 from django.core.management import CommandError, call_command
 from django.test import SimpleTestCase, override_settings
 
@@ -65,7 +66,7 @@ class TestHashedFiles:
 
     def test_path_ignored_completely(self):
         relpath = self.hashed_file_path("cached/css/ignored.css")
-        self.assertEqual(relpath, "cached/css/ignored.2068445f4b21.css")
+        self.assertEqual(relpath, "cached/css/ignored.b71666be52dd.css")
         with storage.staticfiles_storage.open(relpath) as relfile:
             content = relfile.read()
             self.assertIn(b"#foobar", content)
@@ -94,6 +95,13 @@ class TestHashedFiles:
             # Ignore string literals.
             self.assertIn(b'content: "url(non_exist.png)";', content)
             self.assertIn(b"content: 'url(non_exist.png)';", content)
+            # Tailwind-style \' in a selector must not create a false string
+            # that spans the url() value before the next string literal.
+            self.assertIn(
+                b".tw\\:bg-\\[url\\(\\'non_exist.png\\'\\)\\]"
+                b' { background: url("../img/relative.acae32e4532b.png"); }',
+                content,
+            )
         self.assertPostCondition()
 
     def test_path_with_querystring(self):
@@ -725,7 +733,7 @@ class TestCollectionJSModuleImportAggregationManifestStorage(CollectionTestCase)
 
     def test_module_import(self):
         relpath = self.hashed_file_path("cached/module.js")
-        self.assertEqual(relpath, "cached/module.d3ad2487aea3.js")
+        self.assertEqual(relpath, "cached/module.6b343c6c590b.js")
         tests = [
             # Relative imports.
             b'import testConst from "./module_test.477bbebe77f0.js";',
@@ -762,12 +770,18 @@ class TestCollectionJSModuleImportAggregationManifestStorage(CollectionTestCase)
             b"""const help = "import { bar } from './module_test_missing.js';";""",
             b"""const tmpl = `import { baz } from "./module_test_missing.js";`;""",
             b"""const dyn = 'const x = import("./module_test_missing.js");';""",
+            b"const multiLine = `\n"
+            b'import { baz } from "./module_test_missing.js";\n'
+            b"`;",
             # export without from must not consume a subsequent import's from
             b"export { testConst };",
             b'import { firstConst } from "./module_test.477bbebe77f0.js";',
             # Ignore imports in JSDoc block comments that follow a real import.
             b'import"../nested/js/nested.866475c46bb4.js";',
             b'import { something } from "./module_test_missing.js";',
+            # Automatic semicolon insertion
+            b'import * as m from "./module_test.477bbebe77f0.js"\n',
+            b'import { testConst as alias } from "./module_test.477bbebe77f0.js"\n',
         ]
         with storage.staticfiles_storage.open(relpath) as relfile:
             content = relfile.read()
@@ -777,7 +791,7 @@ class TestCollectionJSModuleImportAggregationManifestStorage(CollectionTestCase)
 
     def test_aggregating_modules(self):
         relpath = self.hashed_file_path("cached/module.js")
-        self.assertEqual(relpath, "cached/module.d3ad2487aea3.js")
+        self.assertEqual(relpath, "cached/module.6b343c6c590b.js")
         tests = [
             b'export * from "./module_test.477bbebe77f0.js";',
             b'export { testConst } from "./module_test.477bbebe77f0.js";',
@@ -998,3 +1012,50 @@ class TestCollectionHashedFilesCache(CollectionTestCase):
                 content = relfile.read()
                 self.assertIn(b"foo.57a5cb9ba68d.png", content)
                 self.assertIn(b"xyz.57a5cb9ba68d.png", content)
+
+
+class GetIgnoredBlocksTests(SimpleTestCase):
+    storage = HashedFilesMixin()
+
+    def test_css_block_comment(self):
+        blocks = self.storage.get_ignored_blocks("/* comment */")
+        self.assertEqual(blocks, [(0, 13)])
+
+    def test_css_double_quoted_string(self):
+        blocks = self.storage.get_ignored_blocks('"url(fake.png)"')
+        self.assertEqual(blocks, [(0, 15)])
+
+    def test_css_single_quoted_string(self):
+        blocks = self.storage.get_ignored_blocks("'url(fake.png)'")
+        self.assertEqual(blocks, [(0, 15)])
+
+    def test_css_multiple_blocks(self):
+        content = '/* comment */ url(real.png) "url(fake.png)"'
+        blocks = self.storage.get_ignored_blocks(content)
+        self.assertEqual(blocks, [(0, 13), (28, 43)])
+
+    def test_escape_string(self):
+        content = r".tw\'-\' url(real.png)"
+        blocks = self.storage.get_ignored_blocks(content)
+        self.assertEqual(blocks, [(3, 5), (6, 8)])
+
+    def test_js_line_comment(self):
+        blocks = self.storage.get_ignored_blocks("// line comment", for_js=True)
+        self.assertEqual(blocks, [(0, 15)])
+
+    def test_js_block_comment(self):
+        blocks = self.storage.get_ignored_blocks("/* block comment */", for_js=True)
+        self.assertEqual(blocks, [(0, 19)])
+
+    def test_js_template_literal(self):
+        blocks = self.storage.get_ignored_blocks("`template`", for_js=True)
+        self.assertEqual(blocks, [(0, 10)])
+
+    def test_js_multiline_template_literal(self):
+        blocks = self.storage.get_ignored_blocks("`line1\nline2`", for_js=True)
+        self.assertEqual(blocks, [(0, 13)])
+
+    def test_js_escaped_quote_in_string(self):
+        content = "'it\\'s'"
+        blocks = self.storage.get_ignored_blocks(content, for_js=True)
+        self.assertEqual(blocks, [(0, len(content))])

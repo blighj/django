@@ -14,6 +14,10 @@ import {
 } from "./module_test.js";
 import relativeModule from "../nested/js/nested.js";
 
+// automatic semicolon inseretion
+import * as m from "./module_test.js"
+import { testConst as alias } from "./module_test.js"
+
 // Dynamic imports.
 const dynamicModule = import("./module_test.js");
 
@@ -41,6 +45,9 @@ const msg = 'import { foo } from "./module_test_missing.js";';
 const help = "import { bar } from './module_test_missing.js';";
 const tmpl = `import { baz } from "./module_test_missing.js";`;
 const dyn = 'const x = import("./module_test_missing.js");';
+const multiLine = `
+import { baz } from "./module_test_missing.js";
+`;
 
 // an export without a from clause must not consume a subsequent import's from
 export { testConst };

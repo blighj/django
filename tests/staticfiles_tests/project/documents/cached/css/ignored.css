@@ -34,3 +34,7 @@ body {
     content: "url(non_exist.png)";
     content: 'url(non_exist.png)';
 }
+
+/* Tailwind-style selector */
+.tw\:bg-\[url\(\'non_exist.png\'\)\] { background: url(../img/relative.png); }
+body { font-family: 'sans-serif'; }
