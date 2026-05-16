@@ -73,20 +73,20 @@ class HashedFilesMixin:
                 (
                     r"""(?P<matched>import"""
                     r"""(?P<import>[\s\{][^;]*?|\*\s*as\s*\w+)"""
-                    r"""\s*from\s*['"](?P<url>[./].*?)["']\s*;)"""
+                    r"""\s*from\s*['"](?P<url>[./].*?)["'][ \t]*(?P<semi>;?))"""
                 ),
-                """import%(import)s from "%(url)s";""",
+                """import%(import)s from "%(url)s"%(semi)s""",
             ),
             (
                 (
                     r"""(?P<matched>export(?P<exports>[\s\{][^;]*?)"""
-                    r"""\s*from\s*["'](?P<url>[./].*?)["']\s*;)"""
+                    r"""\s*from\s*["'](?P<url>[./].*?)["'][ \t]*(?P<semi>;?))"""
                 ),
-                """export%(exports)s from "%(url)s";""",
+                """export%(exports)s from "%(url)s"%(semi)s""",
             ),
             (
-                r"""(?P<matched>import\s*['"](?P<url>[./].*?)["']\s*;)""",
-                """import"%(url)s";""",
+                r"""(?P<matched>import\s*['"](?P<url>[./].*?)["'][ \t]*(?P<semi>;?))""",
+                """import"%(url)s"%(semi)s""",
             ),
             (
                 r"""(?P<matched>import\(["'](?P<url>.*?)["']\))""",
