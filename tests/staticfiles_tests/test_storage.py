@@ -102,8 +102,10 @@ class TestHashedFiles:
             # Tailwind-style \' in a selector must not create a false string
             # that spans the url() value before the next string literal.
             self.assertIn(
-                b".tw\\:bg-\\[url\\(\\'non_exist.png\\'\\)\\]"
-                b' { background: url("../img/relative.acae32e4532b.png"); }',
+                str.encode(
+                    r".tw\:bg-\[url\(\'non_exist.png\'\)\]"
+                    r' { background: url("../img/relative.acae32e4532b.png"); }'
+                ),
                 content,
             )
         self.assertPostCondition()
@@ -737,7 +739,7 @@ class TestCollectionJSModuleImportAggregationManifestStorage(CollectionTestCase)
 
     def test_module_import(self):
         relpath = self.hashed_file_path("cached/module.js")
-        self.assertEqual(relpath, "cached/module.6b343c6c590b.js")
+        self.assertEqual(relpath, "cached/module.bdcac26bf737.js")
         tests = [
             # Relative imports.
             b'import testConst from "./module_test.477bbebe77f0.js";',
@@ -786,6 +788,9 @@ class TestCollectionJSModuleImportAggregationManifestStorage(CollectionTestCase)
             # Automatic semicolon insertion
             b'import * as m from "./module_test.477bbebe77f0.js"\n',
             b'import { testConst as alias } from "./module_test.477bbebe77f0.js"\n',
+            # bare specifier imports should not be rewritten
+            b'import rootConst from "@vendor/package";',
+            b'import rootConst from "#utils";',
         ]
         with storage.staticfiles_storage.open(relpath) as relfile:
             content = relfile.read()
@@ -795,7 +800,7 @@ class TestCollectionJSModuleImportAggregationManifestStorage(CollectionTestCase)
 
     def test_aggregating_modules(self):
         relpath = self.hashed_file_path("cached/module.js")
-        self.assertEqual(relpath, "cached/module.6b343c6c590b.js")
+        self.assertEqual(relpath, "cached/module.bdcac26bf737.js")
         tests = [
             b'export * from "./module_test.477bbebe77f0.js";',
             b'export { testConst } from "./module_test.477bbebe77f0.js";',

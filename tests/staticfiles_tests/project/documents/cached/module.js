@@ -60,3 +60,7 @@ import '../nested/js/nested.js';
  * import { something } from "./module_test_missing.js";
  */
 function jsdocExample() {}
+
+// bare specifier imports should not be rewritten
+import rootConst from "@vendor/package";
+import rootConst from "#utils";
