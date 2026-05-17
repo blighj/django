@@ -13,7 +13,11 @@ from django.contrib.staticfiles import finders, storage
 from django.contrib.staticfiles.management.commands.collectstatic import (
     Command as CollectstaticCommand,
 )
-from django.contrib.staticfiles.storage import HashedFilesMixin
+from django.contrib.staticfiles.storage import (
+    HashedFilesMixin,
+    _css_ignored_re,
+    _js_ignored_re,
+)
 from django.core.management import CommandError, call_command
 from django.test import SimpleTestCase, override_settings
 
@@ -1017,45 +1021,101 @@ class TestCollectionHashedFilesCache(CollectionTestCase):
 class GetIgnoredBlocksTests(SimpleTestCase):
     storage = HashedFilesMixin()
 
+    # CSS positive tests.
+
     def test_css_block_comment(self):
-        blocks = self.storage.get_ignored_blocks("/* comment */")
-        self.assertEqual(blocks, [(0, 13)])
+        content = "/* comment */"
+        blocks = self.storage.get_ignored_blocks(content, _css_ignored_re)
+        self.assertEqual(len(blocks), 1)
+        start, end = blocks[0]
+        self.assertEqual(content[start:end], "/* comment */")
 
     def test_css_double_quoted_string(self):
-        blocks = self.storage.get_ignored_blocks('"url(fake.png)"')
-        self.assertEqual(blocks, [(0, 15)])
+        content = '"url(fake.png)"'
+        blocks = self.storage.get_ignored_blocks(content, _css_ignored_re)
+        self.assertEqual(len(blocks), 1)
+        start, end = blocks[0]
+        self.assertEqual(content[start:end], '"url(fake.png)"')
 
     def test_css_single_quoted_string(self):
-        blocks = self.storage.get_ignored_blocks("'url(fake.png)'")
-        self.assertEqual(blocks, [(0, 15)])
+        content = "'url(fake.png)'"
+        blocks = self.storage.get_ignored_blocks(content, _css_ignored_re)
+        self.assertEqual(len(blocks), 1)
+        start, end = blocks[0]
+        self.assertEqual(content[start:end], "'url(fake.png)'")
 
     def test_css_multiple_blocks(self):
         content = '/* comment */ url(real.png) "url(fake.png)"'
-        blocks = self.storage.get_ignored_blocks(content)
-        self.assertEqual(blocks, [(0, 13), (28, 43)])
+        blocks = self.storage.get_ignored_blocks(content, _css_ignored_re)
+        self.assertEqual(len(blocks), 2)
+        start, end = blocks[0]
+        self.assertEqual(content[start:end], "/* comment */")
+        start, end = blocks[1]
+        self.assertEqual(content[start:end], '"url(fake.png)"')
 
-    def test_escape_string(self):
+    def test_css_escape_sequence(self):
         content = r".tw\'-\' url(real.png)"
-        blocks = self.storage.get_ignored_blocks(content)
-        self.assertEqual(blocks, [(3, 5), (6, 8)])
+        blocks = self.storage.get_ignored_blocks(content, _css_ignored_re)
+        self.assertEqual(len(blocks), 2)
+        start, end = blocks[0]
+        self.assertEqual(content[start:end], r"\'")
+        start, end = blocks[1]
+        self.assertEqual(content[start:end], r"\'")
+
+    # CSS negative tests.
+
+    def test_css_unquoted_url_not_ignored(self):
+        blocks = self.storage.get_ignored_blocks("url(image.png)", _css_ignored_re)
+        self.assertEqual(len(blocks), 0)
+
+    def test_css_property_not_ignored(self):
+        blocks = self.storage.get_ignored_blocks(
+            "font: 12px/1.5 sans-serif;", _css_ignored_re
+        )
+        self.assertEqual(len(blocks), 0)
+
+    # JS positive tests.
 
     def test_js_line_comment(self):
-        blocks = self.storage.get_ignored_blocks("// line comment", for_js=True)
-        self.assertEqual(blocks, [(0, 15)])
+        content = "// line comment"
+        blocks = self.storage.get_ignored_blocks(content, _js_ignored_re)
+        self.assertEqual(len(blocks), 1)
+        start, end = blocks[0]
+        self.assertEqual(content[start:end], "// line comment")
 
     def test_js_block_comment(self):
-        blocks = self.storage.get_ignored_blocks("/* block comment */", for_js=True)
-        self.assertEqual(blocks, [(0, 19)])
+        content = "/* block comment */"
+        blocks = self.storage.get_ignored_blocks(content, _js_ignored_re)
+        self.assertEqual(len(blocks), 1)
+        start, end = blocks[0]
+        self.assertEqual(content[start:end], "/* block comment */")
 
     def test_js_template_literal(self):
-        blocks = self.storage.get_ignored_blocks("`template`", for_js=True)
-        self.assertEqual(blocks, [(0, 10)])
+        content = "`template`"
+        blocks = self.storage.get_ignored_blocks(content, _js_ignored_re)
+        self.assertEqual(len(blocks), 1)
+        start, end = blocks[0]
+        self.assertEqual(content[start:end], "`template`")
 
     def test_js_multiline_template_literal(self):
-        blocks = self.storage.get_ignored_blocks("`line1\nline2`", for_js=True)
-        self.assertEqual(blocks, [(0, 13)])
+        content = "`line1\nline2`"
+        blocks = self.storage.get_ignored_blocks(content, _js_ignored_re)
+        self.assertEqual(len(blocks), 1)
+        start, end = blocks[0]
+        self.assertEqual(content[start:end], "`line1\nline2`")
 
     def test_js_escaped_quote_in_string(self):
         content = "'it\\'s'"
-        blocks = self.storage.get_ignored_blocks(content, for_js=True)
-        self.assertEqual(blocks, [(0, len(content))])
+        blocks = self.storage.get_ignored_blocks(content, _js_ignored_re)
+        self.assertEqual(len(blocks), 1)
+        start, end = blocks[0]
+        self.assertEqual(content[start:end], content)
+
+    # JS negative tests.
+    def test_js_unquoted_url_not_ignored(self):
+        blocks = self.storage.get_ignored_blocks("url(image.png)", _js_ignored_re)
+        self.assertEqual(len(blocks), 0)
+
+    def test_js_division_not_a_comment(self):
+        blocks = self.storage.get_ignored_blocks("10 / 2", _js_ignored_re)
+        self.assertEqual(len(blocks), 0)

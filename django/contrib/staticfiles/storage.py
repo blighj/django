@@ -76,6 +76,7 @@ class HashedFilesMixin:
                     r"""\s*from\s*['"](?P<url>[./].*?)["'][ \t]*(?P<semi>;?))"""
                 ),
                 """import%(import)s from "%(url)s"%(semi)s""",
+                _js_ignored_re,
             ),
             (
                 (
@@ -83,14 +84,17 @@ class HashedFilesMixin:
                     r"""\s*from\s*["'](?P<url>[./].*?)["'][ \t]*(?P<semi>;?))"""
                 ),
                 """export%(exports)s from "%(url)s"%(semi)s""",
+                _js_ignored_re,
             ),
             (
                 r"""(?P<matched>import\s*['"](?P<url>[./].*?)["'][ \t]*(?P<semi>;?))""",
                 """import"%(url)s"%(semi)s""",
+                _js_ignored_re,
             ),
             (
                 r"""(?P<matched>import\(["'](?P<url>.*?)["']\))""",
                 """import("%(url)s")""",
+                _js_ignored_re,
             ),
         ),
     )
@@ -119,6 +123,7 @@ class HashedFilesMixin:
                 (
                     r"(?m)^(?P<matched>//# (?-i:sourceMappingURL)=(?P<url>.*))$",
                     "//# sourceMappingURL=%(url)s",
+                    _js_ignored_re,
                 ),
             ),
         ),
@@ -134,11 +139,18 @@ class HashedFilesMixin:
         for extension, patterns in self.patterns:
             for pattern in patterns:
                 if isinstance(pattern, (tuple, list)):
-                    pattern, template = pattern
+                    if len(pattern) == 3:
+                        pattern, template, ignored_re = pattern
+                    else:
+                        pattern, template = pattern
+                        ignored_re = _css_ignored_re
                 else:
                     template = self.default_template
+                    ignored_re = _css_ignored_re
                 compiled = re.compile(pattern, re.IGNORECASE)
-                self._patterns.setdefault(extension, []).append((compiled, template))
+                self._patterns.setdefault(extension, []).append(
+                    (compiled, template, ignored_re)
+                )
 
     def file_hash(self, name, content=None):
         """
@@ -222,15 +234,14 @@ class HashedFilesMixin:
         """
         return self._url(self.stored_name, name, force)
 
-    def get_ignored_blocks(self, content, for_js=False):
+    def get_ignored_blocks(self, content, pattern):
         """
         Return a sorted list of (start, end) tuples for content that should
-        be ignored during URL rewriting: block comments and string literals
-        for CSS, plus line comments (// ...) and template literals (`...`)
-        for JS.
+        be ignored during URL rewriting based on the specified pattern:
+        e.g. block comments and string literals for CSS, plus line comments
+        (// ...) and template literals (`...`) for JS.
         """
-        pattern = _js_ignored_re if for_js else _css_ignored_re
-        return [(m.start(), m.end()) for m in re.finditer(pattern, content)]
+        return [(match.start(), match.end()) for match in re.finditer(pattern, content)]
 
     def is_in_ignored_block(self, pos, ignored_blocks):
         for start, end in ignored_blocks:
@@ -431,16 +442,16 @@ class HashedFilesMixin:
                         yield name, None, exc, False
                     for extension, patterns in self._patterns.items():
                         if matches_patterns(path, (extension,)):
-                            if not any(p.search(content) for p, _ in patterns):
+                            if not any(p.search(content) for p, _, _ in patterns):
                                 continue
-                            for pattern, template in patterns:
+                            for pattern, template, ignored_re in patterns:
                                 converter = self.url_converter(
                                     name,
                                     hashed_files,
                                     template,
                                     self.get_ignored_blocks(
                                         content,
-                                        for_js=path.endswith(".js"),
+                                        ignored_re,
                                     ),
                                 )
                                 try:
